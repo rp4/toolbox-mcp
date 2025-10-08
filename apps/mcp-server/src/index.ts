@@ -454,6 +454,7 @@ async function main() {
         transport,
         createdAt: Date.now()
       });
+      console.error(`Stored session: ${transport.sessionId}, total sessions: ${sessions.size}`);
 
       // 4) Connect MCP server to transport (calls transport.start() automatically)
       await server.connect(transport);
@@ -492,6 +493,8 @@ async function main() {
   // Message endpoint - handle incoming messages from client (JSON-RPC over HTTP)
   app.post('/messages', express.json(), async (req, res) => {
     const sessionId = req.query.sessionId as string;
+    console.error(`Looking for session: ${sessionId}`);
+    console.error(`Active sessions: ${Array.from(sessions.keys()).join(', ')}`);
     const session = sessions.get(sessionId);
 
     if (!session) {
