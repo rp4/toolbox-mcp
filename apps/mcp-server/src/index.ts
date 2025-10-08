@@ -445,8 +445,8 @@ async function main() {
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Connection', 'keep-alive');
 
-      // 2) Create transport - it will handle endpoint event
-      const transport = new SSEServerTransport('/messages', res);
+      // 2) Create transport - use absolute URL for messages endpoint
+      const transport = new SSEServerTransport('https://toolbox-mcp.fly.dev/messages', res);
 
       // 3) Store session
       sessions.set(transport.sessionId, {
@@ -493,8 +493,9 @@ async function main() {
   // Message endpoint - handle incoming messages from client (JSON-RPC over HTTP)
   app.post('/messages', express.json(), async (req, res) => {
     const sessionId = req.query.sessionId as string;
-    console.error(`Looking for session: ${sessionId}`);
-    console.error(`Active sessions: ${Array.from(sessions.keys()).join(', ')}`);
+    console.error(`POST /messages - sessionId: ${sessionId}`);
+    console.error(`  Host: ${req.headers.host}, X-Forwarded-Host: ${req.headers['x-forwarded-host']}`);
+    console.error(`  Active sessions: ${Array.from(sessions.keys()).join(', ')}`);
     const session = sessions.get(sessionId);
 
     if (!session) {
