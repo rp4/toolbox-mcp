@@ -442,6 +442,11 @@ async function main() {
       // 1) Create transport - it will handle headers and endpoint event
       const transport = new SSEServerTransport('/messages', res);
 
+      // Explicitly set headers to prevent compression/buffering
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Connection', 'keep-alive');
+
       // 2) Store session
       sessions.set(transport.sessionId, {
         id: transport.sessionId,
@@ -452,10 +457,17 @@ async function main() {
       // 3) Connect MCP server to transport (calls transport.start() automatically)
       await server.connect(transport);
 
-      // 4) HEARTBEATS every 15s (comment lines) - send AFTER start()
+      // 4) Immediately send a comment to force a first chunk out,
+      //    then keep-alive heartbeats every 15s.
+      try {
+        res.write(`: connected ${Date.now()}\n\n`);
+        if (res.flushHeaders) res.flushHeaders(); // ensure bytes go out now
+      } catch (e) {
+        console.error('Initial heartbeat write failed:', e);
+      }
       const heartbeat = setInterval(() => {
         try {
-          res.write(`: heartbeat ${Date.now()}\n\n`);
+          res.write(`: hb ${Date.now()}\n\n`);
         } catch (err) {
           console.error('Heartbeat error:', err);
           clearInterval(heartbeat);
@@ -476,8 +488,8 @@ async function main() {
     }
   });
 
-  // Message endpoint - handle incoming messages from client
-  app.post('/messages', async (req, res) => {
+  // Message endpoint - handle incoming messages from client (JSON-RPC over HTTP)
+  app.post('/messages', express.json(), async (req, res) => {
     const sessionId = req.query.sessionId as string;
     const session = sessions.get(sessionId);
 
@@ -486,8 +498,16 @@ async function main() {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Let the transport handle the message
-    res.sendStatus(202);
+    try {
+      // Let your SSEServerTransport handle the message and return a reply
+      await session.transport.handlePostMessage(req, res, req.body);
+      // handlePostMessage sends the response itself (202 or error)
+    } catch (err: any) {
+      console.error('handlePostMessage error', err);
+      if (!res.headersSent) {
+        return res.status(500).json({ error: 'handlePostMessage failed' });
+      }
+    }
   });
 
   app.listen(PORT, '0.0.0.0', () => {
