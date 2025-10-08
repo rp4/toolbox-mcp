@@ -8,7 +8,6 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import express from 'express';
-import { randomUUID } from 'crypto';
 
 // UI will be deployed to Vercel separately
 const UI_URL = process.env.UI_URL || 'https://audittoolbox-ui.vercel.app';
@@ -431,28 +430,20 @@ async function main() {
   app.get('/sse', async (req, res) => {
     console.error('New SSE connection');
 
-    // Set SSE headers immediately
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-
-    // 1) CREATE A SESSION
-    const sessionId = randomUUID();
-
-    // 2) SEND endpoint event + blank line (IMPORTANT: must end with \n\n)
-    res.write(`event: endpoint\n`);
-    res.write(`data: /messages?sessionId=${sessionId}\n\n`);
-
-    // 3) Create transport AFTER sending initial event
+    // 1) Create transport - it will handle headers and endpoint event
     const transport = new SSEServerTransport('/messages', res);
-    sessions.set(sessionId, {
-      id: sessionId,
+
+    // 2) Store session
+    sessions.set(transport.sessionId, {
+      id: transport.sessionId,
       transport,
       createdAt: Date.now()
     });
 
-    // 4) HEARTBEATS every 15s (comment lines)
+    // 3) Connect MCP server to transport (calls transport.start() automatically)
+    await server.connect(transport);
+
+    // 4) HEARTBEATS every 15s (comment lines) - send AFTER start()
     const heartbeat = setInterval(() => {
       try {
         res.write(`: heartbeat ${Date.now()}\n\n`);
@@ -464,13 +455,10 @@ async function main() {
 
     // 5) Clean up on disconnect
     req.on('close', () => {
-      console.error(`SSE connection closed: ${sessionId}`);
+      console.error(`SSE connection closed: ${transport.sessionId}`);
       clearInterval(heartbeat);
-      sessions.delete(sessionId);
+      sessions.delete(transport.sessionId);
     });
-
-    // Connect MCP server to transport
-    await server.connect(transport);
   });
 
   // Message endpoint - handle incoming messages from client
