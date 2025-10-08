@@ -406,7 +406,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Start HTTP server with SSE transport
 async function main() {
   const app = express();
-  const PORT = process.env.PORT || 3001;
+  const PORT = parseInt(process.env.PORT || '3001', 10);
 
   // CORS - skip for SSE endpoint to avoid headers being sent early
   app.use((req, res, next) => {
