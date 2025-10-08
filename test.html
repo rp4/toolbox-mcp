@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AuditToolbox MCP Test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .controls {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: white;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    .btn-swimlanes { background: #3b82f6; }
+    .btn-needle { background: #10b981; }
+    .btn-ticktie { background: #f59e0b; }
+    .btn-scheduler { background: #8b5cf6; }
+    .btn-auditverse { background: #ec4899; }
+    .btn-clear { background: #6b7280; }
+    .iframe-container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
+      height: calc(100vh - 200px);
+      min-height: 600px;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .info {
+      background: #dbeafe;
+      border-left: 4px solid #3b82f6;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    .info p {
+      color: #1e40af;
+      font-size: 14px;
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🛠️ AuditToolbox MCP Test Interface</h1>
+
+    <div class="info">
+      <p><strong>Instructions:</strong> Click any button below to test a tool. Make sure the dev server is running on localhost:3000.</p>
+      <p><strong>Dev Server:</strong> Run <code>npm run dev</code> in the apps/web-ui directory</p>
+    </div>
+
+    <div class="controls">
+      <div class="button-group">
+        <button class="btn-swimlanes" onclick="testSwimLanes()">🏊 Test Swimlanes</button>
+        <button class="btn-needle" onclick="testNeedle()">🔍 Test Needle Finder</button>
+        <button class="btn-ticktie" onclick="testTickTie()">🔗 Test Tick'n'Tie</button>
+        <button class="btn-scheduler" onclick="testScheduler()">📅 Test Scheduler</button>
+        <button class="btn-auditverse" onclick="testAuditVerse()">🌌 Test AuditUniverse</button>
+        <button class="btn-clear" onclick="clearContent()">Clear</button>
+      </div>
+    </div>
+
+    <div class="iframe-container">
+      <iframe id="app" src="http://localhost:3000"></iframe>
+    </div>
+  </div>
+
+  <script>
+    function sendMessage(content) {
+      const iframe = document.getElementById('app');
+      iframe.contentWindow.postMessage({
+        type: 'openai:toolOutput',
+        payload: { structuredContent: content }
+      }, '*');
+      console.log('Sent message:', content);
+    }
+
+    function testSwimLanes() {
+      console.log('Testing Swimlanes...');
+      sendMessage({
+        tool: 'swimlanes',
+        spec: {
+          lanes: [
+            { id: 'sales', title: 'Sales Department' },
+            { id: 'finance', title: 'Finance Department' },
+            { id: 'ops', title: 'Operations' },
+            { id: 'it', title: 'IT Support' }
+          ],
+          nodes: [
+            { id: 'n1', laneId: 'sales', label: 'Create Quote' },
+            { id: 'n2', laneId: 'finance', label: 'Review Pricing' },
+            { id: 'n3', laneId: 'sales', label: 'Send to Customer' },
+            { id: 'n4', laneId: 'ops', label: 'Prepare Delivery' },
+            { id: 'n5', laneId: 'it', label: 'Setup Systems' },
+            { id: 'n6', laneId: 'finance', label: 'Process Invoice' }
+          ],
+          edges: [
+            { from: 'n1', to: 'n2', label: 'submit' },
+            { from: 'n2', to: 'n3', label: 'approve' },
+            { from: 'n3', to: 'n4', label: 'order' },
+            { from: 'n4', to: 'n5', label: 'request' },
+            { from: 'n5', to: 'n6', label: 'complete' }
+          ]
+        }
+      });
+    }
+
+    function testNeedle() {
+      console.log('Testing Needle Finder...');
+      sendMessage({
+        tool: 'needle',
+        result: {
+          rows: [
+            { id: 101, vendor: 'ACME Corporation', amount: 99999.99, date: '2024-01-15', status: 'High Risk', flag: 'Duplicate Payment' },
+            { id: 203, vendor: 'Beta Industries LLC', amount: 150000.00, date: '2024-01-18', status: 'Review Required', flag: 'Unusual Amount' },
+            { id: 405, vendor: 'Gamma Technologies', amount: 250000.00, date: '2024-01-22', status: 'Escalated', flag: 'Above Threshold' },
+            { id: 507, vendor: 'Delta Services Inc', amount: 75000.50, date: '2024-01-25', status: 'Pending', flag: 'Missing PO' },
+            { id: 609, vendor: 'Epsilon Solutions', amount: 125000.00, date: '2024-01-28', status: 'Flagged', flag: 'Split Invoice' },
+            { id: 711, vendor: 'Zeta Consulting', amount: 199999.00, date: '2024-02-01', status: 'Critical', flag: 'Round Amount' },
+            { id: 813, vendor: 'Eta Partners', amount: 88888.88, date: '2024-02-05', status: 'Suspicious', flag: 'Pattern Match' },
+            { id: 915, vendor: 'Theta Group', amount: 300000.00, date: '2024-02-08', status: 'Alert', flag: 'New Vendor' }
+          ],
+          summary: {
+            matches: 8,
+            scanned: 24567,
+            flagged: 8,
+            highRisk: 3,
+            totalAmount: 1188888.37
+          }
+        }
+      });
+    }
+
+    function testTickTie() {
+      console.log('Testing Tick\'n\'Tie...');
+      sendMessage({
+        tool: 'tickntie',
+        result: {
+          xlsxDataUrl: 'data:text/plain,Mock Excel Data',
+          links: [
+            { cell: 'B12', file: 'invoice_0421.png', page: 1, bbox: [120, 330, 260, 380] },
+            { cell: 'C12', file: 'receipt_0421.pdf', page: 1, bbox: [50, 200, 150, 250] },
+            { cell: 'B15', file: 'contract_signed.pdf', page: 2, bbox: [100, 150, 300, 400] },
+            { cell: 'D20', file: 'po_document.png', page: 1, bbox: [80, 220, 240, 360] },
+            { cell: 'E25', file: 'approval_form.pdf', page: 1, bbox: [60, 180, 200, 320] }
+          ]
+        }
+      });
+    }
+
+    function testScheduler() {
+      console.log('Testing Scheduler...');
+      sendMessage({
+        tool: 'scheduler',
+        result: {
+          table: [
+            { Time: 'Monday 09:00', Team: 'Engineering', Activity: 'Daily Standup', Room: 'Conference A', Duration: '15 min' },
+            { Time: 'Monday 10:00', Team: 'Sales', Activity: 'Pipeline Review', Room: 'Conference B', Duration: '60 min' },
+            { Time: 'Monday 11:00', Team: 'Engineering', Activity: 'Sprint Planning', Room: 'Conference A', Duration: '120 min' },
+            { Time: 'Monday 14:00', Team: 'Finance', Activity: 'Budget Review', Room: 'Conference C', Duration: '90 min' },
+            { Time: 'Tuesday 09:00', Team: 'Marketing', Activity: 'Campaign Planning', Room: 'Conference B', Duration: '60 min' },
+            { Time: 'Tuesday 11:00', Team: 'Product', Activity: 'Roadmap Discussion', Room: 'Conference A', Duration: '90 min' },
+            { Time: 'Tuesday 14:00', Team: 'Engineering', Activity: 'Code Review', Room: 'Conference C', Duration: '45 min' },
+            { Time: 'Wednesday 09:00', Team: 'All Hands', Activity: 'Company Update', Room: 'Main Hall', Duration: '60 min' },
+            { Time: 'Wednesday 13:00', Team: 'Customer Success', Activity: 'Training Session', Room: 'Conference B', Duration: '120 min' },
+            { Time: 'Thursday 10:00', Team: 'Leadership', Activity: 'Strategy Meeting', Room: 'Executive Room', Duration: '180 min' }
+          ]
+        }
+      });
+    }
+
+    function testAuditVerse() {
+      console.log('Testing AuditUniverse...');
+      sendMessage({
+        tool: 'auditverse',
+        model: {
+          nodes: [
+            { id: 'ap', type: 'entity', label: 'Accounts Payable', size: 1.5 },
+            { id: 'ar', type: 'entity', label: 'Accounts Receivable', size: 1.3 },
+            { id: 'inv', type: 'entity', label: 'Inventory', size: 1.2 },
+            { id: 'gl', type: 'entity', label: 'General Ledger', size: 1.4 },
+            { id: 'payroll', type: 'entity', label: 'Payroll', size: 1.1 },
+            { id: 'risk1', type: 'risk', label: 'Duplicate Payments', size: 1.0 },
+            { id: 'risk2', type: 'risk', label: 'Uncollected AR', size: 0.9 },
+            { id: 'risk3', type: 'risk', label: 'Inventory Shrinkage', size: 0.8 },
+            { id: 'risk4', type: 'risk', label: 'Journal Entry Fraud', size: 1.1 },
+            { id: 'risk5', type: 'risk', label: 'Ghost Employees', size: 0.7 },
+            { id: 'ctrl1', type: 'control', label: '3-Way Match', size: 1.0 },
+            { id: 'ctrl2', type: 'control', label: 'Credit Check', size: 0.9 },
+            { id: 'ctrl3', type: 'control', label: 'Cycle Count', size: 0.8 },
+            { id: 'ctrl4', type: 'control', label: 'Segregation of Duties', size: 1.0 },
+            { id: 'ctrl5', type: 'control', label: 'Biometric Verification', size: 0.9 }
+          ],
+          edges: [
+            { from: 'ap', to: 'risk1', weight: 1 },
+            { from: 'risk1', to: 'ctrl1', weight: 1 },
+            { from: 'ar', to: 'risk2', weight: 1 },
+            { from: 'risk2', to: 'ctrl2', weight: 1 },
+            { from: 'inv', to: 'risk3', weight: 1 },
+            { from: 'risk3', to: 'ctrl3', weight: 1 },
+            { from: 'gl', to: 'risk4', weight: 1 },
+            { from: 'risk4', to: 'ctrl4', weight: 1 },
+            { from: 'payroll', to: 'risk5', weight: 1 },
+            { from: 'risk5', to: 'ctrl5', weight: 1 },
+            { from: 'ap', to: 'gl', weight: 0.5 },
+            { from: 'ar', to: 'gl', weight: 0.5 },
+            { from: 'inv', to: 'gl', weight: 0.5 }
+          ],
+          layout: 'force'
+        }
+      });
+    }
+
+    function clearContent() {
+      console.log('Clearing content...');
+      const iframe = document.getElementById('app');
+      iframe.src = iframe.src; // Reload iframe
+    }
+
+    // Auto-test on load after a short delay
+    window.addEventListener('load', () => {
+      console.log('Test page loaded. Waiting 2 seconds before auto-testing Swimlanes...');
+      setTimeout(() => {
+        testSwimLanes();
+      }, 2000);
+    });
+
+    // Listen for messages from iframe
+    window.addEventListener('message', (event) => {
+      console.log('Received message from iframe:', event.data);
+    });
+  </script>
+</body>
+</html>
