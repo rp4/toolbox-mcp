@@ -8,9 +8,18 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import express from 'express';
+import { randomUUID } from 'crypto';
 
 // UI will be deployed to Vercel separately
 const UI_URL = process.env.UI_URL || 'https://audittoolbox-ui.vercel.app';
+
+// Session storage for MCP connections
+interface Session {
+  id: string;
+  transport: SSEServerTransport;
+  createdAt: number;
+}
+const sessions = new Map<string, Session>();
 
 // Create MCP server
 const server = new Server(
@@ -400,9 +409,6 @@ async function main() {
   const app = express();
   const PORT = process.env.PORT || 3001;
 
-  // Store active transports by session ID
-  const transports = new Map<string, SSEServerTransport>();
-
   // CORS
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -425,15 +431,30 @@ async function main() {
   app.get('/sse', async (req, res) => {
     console.error('New SSE connection');
 
+    // Set SSE headers immediately
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    // 1) CREATE A SESSION
+    const sessionId = randomUUID();
+
+    // 2) SEND endpoint event + blank line (IMPORTANT: must end with \n\n)
+    res.write(`event: endpoint\n`);
+    res.write(`data: /messages?sessionId=${sessionId}\n\n`);
+
+    // 3) Create transport AFTER sending initial event
     const transport = new SSEServerTransport('/messages', res);
-    const sessionId = transport.sessionId;
+    sessions.set(sessionId, {
+      id: sessionId,
+      transport,
+      createdAt: Date.now()
+    });
 
-    transports.set(sessionId, transport);
-
-    // Send heartbeat every 15 seconds to keep connection alive
+    // 4) HEARTBEATS every 15s (comment lines)
     const heartbeat = setInterval(() => {
       try {
-        // Send SSE comment line as heartbeat (standard practice)
         res.write(`: heartbeat ${Date.now()}\n\n`);
       } catch (err) {
         console.error('Heartbeat error:', err);
@@ -441,23 +462,24 @@ async function main() {
       }
     }, 15000);
 
-    // Clean up on disconnect
-    res.on('close', () => {
+    // 5) Clean up on disconnect
+    req.on('close', () => {
       console.error(`SSE connection closed: ${sessionId}`);
       clearInterval(heartbeat);
-      transports.delete(sessionId);
+      sessions.delete(sessionId);
     });
 
+    // Connect MCP server to transport
     await server.connect(transport);
   });
 
   // Message endpoint - handle incoming messages from client
   app.post('/messages', async (req, res) => {
     const sessionId = req.query.sessionId as string;
-    const transport = transports.get(sessionId);
+    const session = sessions.get(sessionId);
 
-    if (!transport) {
-      console.error(`No transport found for session: ${sessionId}`);
+    if (!session) {
+      console.error(`No session found for: ${sessionId}`);
       return res.status(404).json({ error: 'Session not found' });
     }
 
