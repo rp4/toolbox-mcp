@@ -1,10 +1,7 @@
 {
-  "version": 2,
   "buildCommand": "cd apps/web-ui && npm run build",
-  "outputDirectory": "apps/web-ui/.next",
+  "devCommand": "cd apps/web-ui && npm run dev",
+  "installCommand": "npm install",
   "framework": "nextjs",
-  "regions": ["iad1"],
-  "github": {
-    "silent": true
-  }
+  "outputDirectory": "apps/web-ui/.next"
 }

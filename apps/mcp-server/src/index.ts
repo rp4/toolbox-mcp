@@ -8,10 +8,9 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import express from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 
-const NGROK_URL = process.env.NGROK_URL || 'https://adjustmental-plutean-george.ngrok-free.dev';
-const UI_PORT = process.env.UI_PORT || '3000';
+// UI will be deployed to Vercel separately
+const UI_URL = process.env.UI_URL || 'https://audittoolbox-ui.vercel.app';
 
 // Create MCP server
 const server = new Server(
@@ -56,17 +55,17 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   <title>AuditToolbox</title>
 </head>
 <body>
-  <iframe src="${NGROK_URL}/" style="width:100%;height:100vh;border:none;position:absolute;top:0;left:0;"></iframe>
+  <iframe src="${UI_URL}/" style="width:100%;height:100vh;border:none;position:absolute;top:0;left:0;"></iframe>
 </body>
 </html>`,
           _meta: {
             'openai/widgetDescription': 'AuditToolbox - 5 audit & analysis tools',
             'openai/widgetPrefersBorder': true,
             'openai/widgetCSP': {
-              connect_domains: [NGROK_URL],
-              resource_domains: [NGROK_URL],
+              connect_domains: [UI_URL],
+              resource_domains: [UI_URL],
             },
-            'openai/widgetDomain': NGROK_URL,
+            'openai/widgetDomain': UI_URL,
           },
         },
       ],
@@ -308,7 +307,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name, arguments: args = {} as any } = request.params;
 
   switch (name) {
     case 'swimlanes':
@@ -453,18 +452,10 @@ async function main() {
     res.sendStatus(202);
   });
 
-  // Proxy all other requests to Next.js UI
-  app.use('/', createProxyMiddleware({
-    target: `http://localhost:${UI_PORT}`,
-    changeOrigin: true,
-    ws: true, // proxy websockets for HMR
-  }));
-
   app.listen(PORT, () => {
     console.error(`AuditToolbox MCP server running on http://localhost:${PORT}`);
     console.error(`SSE endpoint: http://localhost:${PORT}/sse`);
-    console.error(`Widget URL: ${NGROK_URL}`);
-    console.error(`Proxying UI from: http://localhost:${UI_PORT}`);
+    console.error(`Widget URL: ${UI_URL}`);
   });
 }
 
