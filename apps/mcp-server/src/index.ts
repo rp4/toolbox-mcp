@@ -430,9 +430,21 @@ async function main() {
 
     transports.set(sessionId, transport);
 
+    // Send heartbeat every 15 seconds to keep connection alive
+    const heartbeat = setInterval(() => {
+      try {
+        // Send SSE comment line as heartbeat (standard practice)
+        res.write(`: heartbeat ${Date.now()}\n\n`);
+      } catch (err) {
+        console.error('Heartbeat error:', err);
+        clearInterval(heartbeat);
+      }
+    }, 15000);
+
     // Clean up on disconnect
     res.on('close', () => {
       console.error(`SSE connection closed: ${sessionId}`);
+      clearInterval(heartbeat);
       transports.delete(sessionId);
     });
 
