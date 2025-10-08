@@ -408,8 +408,11 @@ async function main() {
   const app = express();
   const PORT = process.env.PORT || 3001;
 
-  // CORS
+  // CORS - skip for SSE endpoint to avoid headers being sent early
   app.use((req, res, next) => {
+    if (req.path === '/sse') {
+      return next(); // Skip CORS for SSE
+    }
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -419,7 +422,12 @@ async function main() {
     next();
   });
 
-  app.use(express.json());
+  app.use((req, res, next) => {
+    if (req.path === '/sse') {
+      return next(); // Skip JSON parser for SSE
+    }
+    express.json()(req, res, next);
+  });
 
   // Health check
   app.get('/health', (req, res) => {
@@ -430,35 +438,42 @@ async function main() {
   app.get('/sse', async (req, res) => {
     console.error('New SSE connection');
 
-    // 1) Create transport - it will handle headers and endpoint event
-    const transport = new SSEServerTransport('/messages', res);
+    try {
+      // 1) Create transport - it will handle headers and endpoint event
+      const transport = new SSEServerTransport('/messages', res);
 
-    // 2) Store session
-    sessions.set(transport.sessionId, {
-      id: transport.sessionId,
-      transport,
-      createdAt: Date.now()
-    });
+      // 2) Store session
+      sessions.set(transport.sessionId, {
+        id: transport.sessionId,
+        transport,
+        createdAt: Date.now()
+      });
 
-    // 3) Connect MCP server to transport (calls transport.start() automatically)
-    await server.connect(transport);
+      // 3) Connect MCP server to transport (calls transport.start() automatically)
+      await server.connect(transport);
 
-    // 4) HEARTBEATS every 15s (comment lines) - send AFTER start()
-    const heartbeat = setInterval(() => {
-      try {
-        res.write(`: heartbeat ${Date.now()}\n\n`);
-      } catch (err) {
-        console.error('Heartbeat error:', err);
+      // 4) HEARTBEATS every 15s (comment lines) - send AFTER start()
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(`: heartbeat ${Date.now()}\n\n`);
+        } catch (err) {
+          console.error('Heartbeat error:', err);
+          clearInterval(heartbeat);
+        }
+      }, 15000);
+
+      // 5) Clean up on disconnect
+      req.on('close', () => {
+        console.error(`SSE connection closed: ${transport.sessionId}`);
         clearInterval(heartbeat);
+        sessions.delete(transport.sessionId);
+      });
+    } catch (error) {
+      console.error('SSE connection error:', error);
+      if (!res.headersSent) {
+        res.status(500).end('SSE connection failed');
       }
-    }, 15000);
-
-    // 5) Clean up on disconnect
-    req.on('close', () => {
-      console.error(`SSE connection closed: ${transport.sessionId}`);
-      clearInterval(heartbeat);
-      sessions.delete(transport.sessionId);
-    });
+    }
   });
 
   // Message endpoint - handle incoming messages from client
@@ -475,9 +490,9 @@ async function main() {
     res.sendStatus(202);
   });
 
-  app.listen(PORT, () => {
-    console.error(`AuditToolbox MCP server running on http://localhost:${PORT}`);
-    console.error(`SSE endpoint: http://localhost:${PORT}/sse`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.error(`AuditToolbox MCP server running on http://0.0.0.0:${PORT}`);
+    console.error(`SSE endpoint: http://0.0.0.0:${PORT}/sse`);
     console.error(`Widget URL: ${UI_URL}`);
   });
 }
