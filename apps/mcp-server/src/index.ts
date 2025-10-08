@@ -439,25 +439,26 @@ async function main() {
     console.error('New SSE connection');
 
     try {
-      // 1) Create transport - it will handle headers and endpoint event
-      const transport = new SSEServerTransport('/messages', res);
-
-      // Explicitly set headers to prevent compression/buffering
+      // 1) Set headers FIRST to prevent compression/buffering
+      //    Must be before transport.start() which calls res.writeHead()
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Connection', 'keep-alive');
 
-      // 2) Store session
+      // 2) Create transport - it will handle endpoint event
+      const transport = new SSEServerTransport('/messages', res);
+
+      // 3) Store session
       sessions.set(transport.sessionId, {
         id: transport.sessionId,
         transport,
         createdAt: Date.now()
       });
 
-      // 3) Connect MCP server to transport (calls transport.start() automatically)
+      // 4) Connect MCP server to transport (calls transport.start() automatically)
       await server.connect(transport);
 
-      // 4) Immediately send a comment to force a first chunk out,
+      // 5) Immediately send a comment to force a first chunk out,
       //    then keep-alive heartbeats every 15s.
       try {
         res.write(`: connected ${Date.now()}\n\n`);
