@@ -424,14 +424,34 @@ async function main() {
   // SSE endpoint for MCP
   app.get('/sse', async (req, res) => {
     console.error('New SSE connection');
+
+    // Set SSE headers immediately
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
     const transport = new SSEServerTransport('/messages', res);
     const sessionId = transport.sessionId;
 
     transports.set(sessionId, transport);
 
+    // Send immediate heartbeat to prevent timeout
+    res.write(`: connected ${Date.now()}\n\n`);
+
+    // Send heartbeat every 15 seconds
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`: heartbeat ${Date.now()}\n\n`);
+      } catch (err) {
+        clearInterval(heartbeat);
+      }
+    }, 15000);
+
     // Clean up on disconnect
     res.on('close', () => {
       console.error(`SSE connection closed: ${sessionId}`);
+      clearInterval(heartbeat);
       transports.delete(sessionId);
     });
 
