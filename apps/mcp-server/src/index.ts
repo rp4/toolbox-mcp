@@ -6,8 +6,21 @@ import {
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import express from 'express';
+
+// Production enhancements
+import { validateToolInvocation } from './validation/index.js';
+import { handleToolError } from './middleware/error-handler.js';
+import { sseRateLimiter, toolRateLimiter, checkToolRateLimit } from './middleware/rate-limit.js';
+import { logger, logToolInvocation, logSessionEvent } from './middleware/logger.js';
+import { ToolNotFoundError } from './utils/errors.js';
+
+// Prompts and Resources
+import { prompts, getPromptContent } from './prompts/index.js';
+import { resources, getResourceContent } from './resources/index.js';
 
 // UI will be deployed to Vercel separately
 const UI_URL = process.env.UI_URL || 'https://audittoolbox-ui.vercel.app';
@@ -30,11 +43,12 @@ const server = new Server(
     capabilities: {
       resources: {},
       tools: {},
+      prompts: {},
     },
   }
 );
 
-// Register the widget HTML resource
+// Register resources (widget + documentation)
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
   return {
     resources: [
@@ -44,12 +58,16 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
         name: 'AuditToolbox Widget',
         description: 'Interactive UI for all 5 audit tools',
       },
+      ...resources,
     ],
   };
 });
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  if (request.params.uri === 'ui://widget/widget.html') {
+  const { uri } = request.params;
+
+  // Widget HTML
+  if (uri === 'ui://widget/widget.html') {
     return {
       contents: [
         {
@@ -79,7 +97,51 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       ],
     };
   }
-  throw new Error(`Unknown resource: ${request.params.uri}`);
+
+  // Documentation resources
+  try {
+    const content = getResourceContent(uri);
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'text/markdown',
+          text: content,
+        },
+      ],
+    };
+  } catch (error) {
+    throw new Error(`Unknown resource: ${uri}`);
+  }
+});
+
+// List available prompts
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+  return {
+    prompts,
+  };
+});
+
+// Get prompt content
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  try {
+    const content = getPromptContent(name, args as Record<string, string>);
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: content,
+          },
+        },
+      ],
+    };
+  } catch (error) {
+    throw new Error(`Unknown prompt: ${name}`);
+  }
 });
 
 // Register all 5 tools
@@ -313,93 +375,121 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// Handle tool calls
+// Handle tool calls with validation and error handling
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} as any } = request.params;
 
-  switch (name) {
-    case 'swimlanes':
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Created swimlane diagram with ${args.lanes?.length || 0} lanes, ${args.nodes?.length || 0} nodes, and ${args.edges?.length || 0} connections.`,
-          },
-        ],
-        structuredContent: {
-          tool: 'swimlanes',
-          spec: args,
-        },
-      };
+  // Get session ID from request context (if available)
+  const sessionId = (request as any).sessionId || 'unknown';
 
-    case 'needle_finder':
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Found ${args.findings?.length || 0} anomalies in ${args.data?.length || 0} rows.`,
-          },
-        ],
-        structuredContent: {
-          tool: 'needle',
-          result: {
-            data: args.data,
-            findings: args.findings,
-          },
-        },
-      };
+  try {
+    // Check rate limit
+    checkToolRateLimit(sessionId);
 
-    case 'tickntie':
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Created ${args.links?.length || 0} links between spreadsheet cells and ${args.documents?.length || 0} documents.`,
-          },
-        ],
-        structuredContent: {
-          tool: 'tickntie',
-          workbook: args.workbook,
-          links: args.links,
-          documents: args.documents,
-        },
-      };
+    // Validate input
+    const validated = validateToolInvocation(name, args);
 
-    case 'scheduler':
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Created schedule for ${args.people?.length || 0} people across ${args.slots?.length || 0} time slots.`,
-          },
-        ],
-        structuredContent: {
-          tool: 'scheduler',
-          people: args.people,
-          slots: args.slots,
-          assignments: args.assignments,
-        },
-      };
+    // Log invocation (metadata only, no user data)
+    logToolInvocation(name, sessionId, validated);
 
-    case 'auditverse':
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Created 3D visualization with ${args.nodes?.length || 0} nodes and ${args.edges?.length || 0} connections.`,
+    // Process tool
+    switch (name) {
+      case 'swimlanes':
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Created swimlane diagram with ${args.lanes?.length || 0} lanes, ${args.nodes?.length || 0} nodes, and ${args.edges?.length || 0} connections.`,
+            },
+          ],
+          structuredContent: {
+            tool: 'swimlanes',
+            spec: validated,
           },
-        ],
-        structuredContent: {
-          tool: 'auditverse',
-          graph: {
-            nodes: args.nodes,
-            edges: args.edges,
-          },
-        },
-      };
+        };
 
-    default:
-      throw new Error(`Unknown tool: ${name}`);
+      case 'needle_finder':
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Found ${args.findings?.length || 0} anomalies in ${args.data?.length || 0} rows.`,
+            },
+          ],
+          structuredContent: {
+            tool: 'needle',
+            result: {
+              rows: (validated as any).data,
+              summary: {},
+            },
+          },
+        };
+
+      case 'tickntie':
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Created ${args.links?.length || 0} links between spreadsheet cells and ${args.documents?.length || 0} documents.`,
+            },
+          ],
+          structuredContent: {
+            tool: 'tickntie',
+            result: {
+              xlsxDataUrl: '', // Will be populated by client
+              links: (validated as any).links?.map((link: any) => ({
+                cell: link.cellRef,
+                file: link.documentId,
+                page: link.pageNumber,
+              })),
+            },
+          },
+        };
+
+      case 'scheduler':
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Created schedule for ${args.people?.length || 0} people across ${args.slots?.length || 0} time slots.`,
+            },
+          ],
+          structuredContent: {
+            tool: 'scheduler',
+            result: {
+              xlsxDataUrl: '', // Will be populated by client
+              table: [],
+            },
+          },
+        };
+
+      case 'auditverse':
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Created 3D visualization with ${args.nodes?.length || 0} nodes and ${args.edges?.length || 0} connections.`,
+            },
+          ],
+          structuredContent: {
+            tool: 'auditverse',
+            model: {
+              nodes: (validated as any).nodes.map((n: any) => ({
+                id: n.id,
+                type: n.type || 'entity',
+                label: n.label,
+              })),
+              edges: (validated as any).edges,
+            },
+          },
+        };
+
+      default:
+        throw new ToolNotFoundError(name);
+    }
+  } catch (error) {
+    // Handle all errors with proper formatting
+    return handleToolError(error, name);
   }
 });
 
@@ -434,9 +524,9 @@ async function main() {
     res.json({ status: 'ok', service: 'audittoolbox-mcp' });
   });
 
-  // SSE endpoint for MCP
-  app.get('/sse', async (req, res) => {
-    console.error('New SSE connection');
+  // SSE endpoint for MCP (with rate limiting)
+  app.get('/sse', sseRateLimiter, async (req, res) => {
+    logger.info({ event: 'sse_connection_attempt', ip: req.ip });
 
     try {
       // 1) Set headers FIRST to prevent compression/buffering
@@ -448,13 +538,16 @@ async function main() {
       // 2) Create transport - use absolute URL for messages endpoint
       const transport = new SSEServerTransport('https://toolbox-mcp.fly.dev/messages', res);
 
-      // 3) Store session
+      // 3) Store session and log creation
+      const sessionStartTime = Date.now();
       sessions.set(transport.sessionId, {
         id: transport.sessionId,
         transport,
-        createdAt: Date.now()
+        createdAt: sessionStartTime
       });
-      console.error(`Stored session: ${transport.sessionId}, total sessions: ${sessions.size}`);
+
+      logSessionEvent('session_created', transport.sessionId);
+      logger.info({ event: 'session_stored', sessionId: transport.sessionId, totalSessions: sessions.size });
 
       // 4) Connect MCP server to transport (calls transport.start() automatically)
       await server.connect(transport);
@@ -476,11 +569,16 @@ async function main() {
         }
       }, 15000);
 
-      // 5) Clean up on disconnect
+      // 6) Clean up on disconnect
       req.on('close', () => {
-        console.error(`SSE connection closed: ${transport.sessionId}`);
+        const durationMs = Date.now() - sessionStartTime;
+        logger.info({ event: 'sse_connection_closed', sessionId: transport.sessionId, durationMs });
+
         clearInterval(heartbeat);
         sessions.delete(transport.sessionId);
+        toolRateLimiter.removeSession(transport.sessionId);
+
+        logSessionEvent('session_closed', transport.sessionId, { durationMs });
       });
     } catch (error) {
       console.error('SSE connection error:', error);
@@ -516,6 +614,14 @@ async function main() {
   });
 
   app.listen(PORT, '0.0.0.0', () => {
+    logger.info({
+      event: 'server_started',
+      port: PORT,
+      host: '0.0.0.0',
+      sseEndpoint: `http://0.0.0.0:${PORT}/sse`,
+      widgetUrl: UI_URL,
+      env: process.env.NODE_ENV || 'production',
+    });
     console.error(`AuditToolbox MCP server running on http://0.0.0.0:${PORT}`);
     console.error(`SSE endpoint: http://0.0.0.0:${PORT}/sse`);
     console.error(`Widget URL: ${UI_URL}`);
