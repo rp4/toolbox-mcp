@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { SwimlanesSpec } from '@audittoolbox/schemas'
+import type { SwimlanesSpec, SwimlanesDownloadParams } from '@audittoolbox/schemas'
+import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 
 interface SwimlanesViewProps {
   spec: SwimlanesSpec
@@ -180,6 +181,89 @@ export function SwimlanesView({ spec }: SwimlanesViewProps) {
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen)
   }
+
+  // Register AI agent actions
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.openai?.actions?.register) return
+
+    const downloadData = async (params: SwimlanesDownloadParams) => {
+      try {
+        const canvas = canvasRef.current
+        if (!canvas) {
+          return createErrorResponse('Canvas not available', 'CANVAS_NOT_READY')
+        }
+
+        let filteredSpec = spec
+
+        // Apply lane filter if provided
+        if (params.laneId) {
+          const lane = spec.lanes.find((l) => l.id === params.laneId)
+          if (!lane) {
+            return createErrorResponse(`Lane ${params.laneId} not found`, 'LANE_NOT_FOUND')
+          }
+
+          const laneNodes = spec.nodes.filter((n) => n.laneId === params.laneId)
+          const nodeIds = new Set(laneNodes.map((n) => n.id))
+          const laneEdges = spec.edges.filter(
+            (e) => nodeIds.has(e.from) && nodeIds.has(e.to)
+          )
+
+          filteredSpec = {
+            lanes: [lane],
+            nodes: laneNodes,
+            edges: laneEdges,
+          }
+        }
+
+        // Format data based on requested format
+        if (params.format === 'json') {
+          return createSuccessResponse(
+            filteredSpec,
+            `Exported ${filteredSpec.nodes.length} nodes across ${filteredSpec.lanes.length} lane(s)`
+          )
+        } else if (params.format === 'png') {
+          return new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+              if (!blob) {
+                resolve(createErrorResponse('Failed to generate PNG', 'PNG_GENERATION_FAILED'))
+                return
+              }
+
+              const reader = new FileReader()
+              reader.onloadend = () => {
+                const base64 = reader.result as string
+                resolve(
+                  createSuccessResponse(
+                    { dataUrl: base64, mimeType: 'image/png' },
+                    'Exported diagram as PNG'
+                  )
+                )
+              }
+              reader.readAsDataURL(blob)
+            })
+          })
+        } else if (params.format === 'svg') {
+          // For SVG export, we'd need to recreate the diagram using SVG instead of canvas
+          // For now, return a simple SVG representation
+          return createErrorResponse('SVG export not yet implemented', 'NOT_IMPLEMENTED')
+        }
+
+        return createErrorResponse('Invalid format. Use "png", "svg", or "json"', 'INVALID_FORMAT')
+      } catch (error) {
+        return createErrorResponse(
+          error instanceof Error ? error.message : 'Failed to download data',
+          'DOWNLOAD_ERROR'
+        )
+      }
+    }
+
+    const actions = { downloadData }
+    window.openai.actions.register(actions)
+
+    return () => {
+      window.openai?.actions?.unregister?.()
+    }
+  }, [spec])
 
   return (
     <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'h-screen'}`}>

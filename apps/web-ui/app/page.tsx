@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type {
   StructuredContent,
+  TestToolContent,
   SwimlanesContent,
   NeedleContent,
   TickTieContent,
@@ -10,6 +11,7 @@ import type {
   AuditVerseContent,
 } from '@audittoolbox/schemas'
 import { StructuredContentSchema } from '@audittoolbox/schemas'
+import { TestToolView } from '@/components/views/TestToolView'
 import { SwimlanesView } from '@/components/views/SwimlanesView'
 import { NeedleView } from '@/components/views/NeedleView'
 import { TickTieView } from '@/components/views/TickTieView'
@@ -90,6 +92,8 @@ export default function App() {
 
   // Route to the appropriate view based on tool type
   switch (content.tool) {
+    case 'test':
+      return <TestToolView message={(content as TestToolContent).message} />
     case 'swimlanes':
       return <SwimlanesView spec={(content as SwimlanesContent).spec} />
     case 'needle':

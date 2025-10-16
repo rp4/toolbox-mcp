@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import type { TickTieResult } from '@audittoolbox/schemas'
+import type { TickTieResult, TickTieDownloadParams } from '@audittoolbox/schemas'
+import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 
 interface TickTieViewProps {
   result: TickTieResult
@@ -50,6 +51,61 @@ export function TickTieView({ result }: TickTieViewProps) {
       setSelectedCell(link.cell)
     }
   }
+
+  // Register AI agent actions
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.openai?.actions?.register) return
+
+    const downloadData = async (params: TickTieDownloadParams) => {
+      try {
+        // Format data based on requested format
+        if (params.format === 'xlsx') {
+          // Return the xlsx data URL directly
+          return createSuccessResponse(
+            {
+              dataUrl: result.xlsxDataUrl,
+              mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              fileName: 'tickntie-workbook.xlsx',
+            },
+            'Excel workbook ready for download'
+          )
+        } else if (params.format === 'json') {
+          // Return links data as JSON
+          const data: any = {
+            xlsxDataUrl: result.xlsxDataUrl,
+          }
+
+          if (params.includeLinks !== false && result.links) {
+            data.links = result.links
+            data.summary = {
+              totalLinks: result.links.length,
+              uniqueCells: Array.from(new Set(result.links.map((l) => l.cell))).length,
+              uniqueFiles: Array.from(new Set(result.links.map((l) => l.file))).length,
+            }
+          }
+
+          return createSuccessResponse(
+            data,
+            `Exported workbook metadata${result.links ? ` with ${result.links.length} link(s)` : ''}`
+          )
+        }
+
+        return createErrorResponse('Invalid format. Use "xlsx" or "json"', 'INVALID_FORMAT')
+      } catch (error) {
+        return createErrorResponse(
+          error instanceof Error ? error.message : 'Failed to download data',
+          'DOWNLOAD_ERROR'
+        )
+      }
+    }
+
+    const actions = { downloadData }
+    window.openai.actions.register(actions)
+
+    return () => {
+      window.openai?.actions?.unregister?.()
+    }
+  }, [result])
 
   return (
     <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'h-screen'}`}>

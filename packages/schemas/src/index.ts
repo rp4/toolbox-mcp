@@ -4,7 +4,7 @@ import { z } from 'zod'
 // Common Types
 // ============================================================================
 
-export const ToolType = z.enum(['swimlanes', 'needle', 'tickntie', 'scheduler', 'auditverse'])
+export const ToolType = z.enum(['test', 'swimlanes', 'needle', 'tickntie', 'scheduler', 'auditverse'])
 export type ToolType = z.infer<typeof ToolType>
 
 export const UploadedFileSchema = z.object({
@@ -19,6 +19,16 @@ export type UploadedFile = z.infer<typeof UploadedFileSchema>
 export const StructuredContentBaseSchema = z.object({
   tool: ToolType,
 })
+
+// ============================================================================
+// Test Tool Schemas
+// ============================================================================
+
+export const TestToolContentSchema = StructuredContentBaseSchema.extend({
+  tool: z.literal('test'),
+  message: z.string(),
+})
+export type TestToolContent = z.infer<typeof TestToolContentSchema>
 
 // ============================================================================
 // Swimlanes Schemas
@@ -160,6 +170,7 @@ export type AuditVerseContent = z.infer<typeof AuditVerseContentSchema>
 // ============================================================================
 
 export const StructuredContentSchema = z.discriminatedUnion('tool', [
+  TestToolContentSchema,
   SwimlanesContentSchema,
   NeedleContentSchema,
   TickTieContentSchema,
@@ -176,3 +187,9 @@ export const ToolOutputSchema = z.object({
   structuredContent: StructuredContentSchema,
 })
 export type ToolOutput = z.infer<typeof ToolOutputSchema>
+
+// ============================================================================
+// Export Actions
+// ============================================================================
+
+export * from './actions'

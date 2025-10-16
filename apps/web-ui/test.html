@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Tool - Local Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .controls {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: inherit;
+      min-height: 100px;
+      margin-bottom: 10px;
+    }
+    button {
+      background: #6366f1;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #4f46e5;
+    }
+    iframe {
+      width: 100%;
+      height: 600px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: white;
+    }
+    .info {
+      background: #fef3c7;
+      border: 1px solid #fbbf24;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Test Tool - Local Testing</h1>
+
+    <div class="controls">
+      <div class="info">
+        <strong>Instructions:</strong> Type a message below and click "Send to iframe" to test the integration.
+      </div>
+
+      <textarea id="messageInput" placeholder="Enter your message here...">Hello from ChatGPT! This is a test message to verify the iframe integration is working correctly. ✨</textarea>
+
+      <button onclick="sendMessage()">Send to iframe</button>
+
+      <details style="margin-top: 10px;">
+        <summary style="cursor: pointer; font-weight: bold;">View JSON payload</summary>
+        <pre id="jsonPayload" style="background: #f9f9f9; padding: 10px; border-radius: 4px; overflow-x: auto; margin-top: 10px;"></pre>
+      </details>
+    </div>
+
+    <iframe id="testFrame" src="http://localhost:3000"></iframe>
+  </div>
+
+  <script>
+    function sendMessage() {
+      const message = document.getElementById('messageInput').value;
+      const iframe = document.getElementById('testFrame');
+
+      const payload = {
+        tool: 'test',
+        message: message
+      };
+
+      // Display JSON
+      document.getElementById('jsonPayload').textContent = JSON.stringify(payload, null, 2);
+
+      // Send via postMessage (simulating ChatGPT's Apps SDK)
+      iframe.contentWindow.postMessage({
+        type: 'openai:toolOutput',
+        payload: {
+          structuredContent: payload
+        }
+      }, '*');
+
+      console.log('Sent payload:', payload);
+    }
+
+    // Auto-send on load after a short delay
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        sendMessage();
+      }, 1000);
+    });
+  </script>
+</body>
+</html>

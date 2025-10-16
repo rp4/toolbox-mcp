@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import type { NeedleFinderResult } from '@audittoolbox/schemas'
+import { useState, useMemo, useEffect } from 'react'
+import type { NeedleFinderResult, NeedleDownloadParams } from '@audittoolbox/schemas'
+import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 import {
   useReactTable,
   getCoreRowModel,
@@ -83,6 +84,100 @@ export function NeedleView({ result }: NeedleViewProps) {
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen)
   }
+
+  // Register AI agent actions
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.openai?.actions?.register) return
+
+    const downloadData = async (params: NeedleDownloadParams) => {
+      try {
+        let filteredRows = result.rows
+
+        // Apply filters if provided
+        if (params.filters) {
+          if (params.filters.columns && params.filters.columns.length > 0) {
+            // Filter to only include specified columns
+            filteredRows = filteredRows.map((row) => {
+              const filtered: Record<string, string | number> = {}
+              params.filters!.columns!.forEach((col) => {
+                if (col in row) {
+                  filtered[col] = row[col]
+                }
+              })
+              return filtered
+            })
+          }
+
+          if (params.filters.searchTerm) {
+            // Filter rows that contain the search term in any column
+            const searchLower = params.filters.searchTerm.toLowerCase()
+            filteredRows = filteredRows.filter((row) =>
+              Object.values(row).some((val) =>
+                String(val).toLowerCase().includes(searchLower)
+              )
+            )
+          }
+
+          if (params.filters.limit && params.filters.limit > 0) {
+            filteredRows = filteredRows.slice(0, params.filters.limit)
+          }
+        }
+
+        if (filteredRows.length === 0) {
+          return createSuccessResponse({ rows: [], summary: {} }, 'No rows match the filters')
+        }
+
+        // Format data based on requested format
+        if (params.format === 'json') {
+          return createSuccessResponse(
+            {
+              rows: filteredRows,
+              summary: result.summary,
+              count: filteredRows.length,
+            },
+            `Exported ${filteredRows.length} row(s)`
+          )
+        } else if (params.format === 'csv') {
+          const headers = Object.keys(filteredRows[0])
+          const csvRows = [
+            headers.join(','),
+            ...filteredRows.map((row) =>
+              headers
+                .map((header) => {
+                  const value = row[header]
+                  const stringValue = String(value)
+                  if (stringValue.includes(',') || stringValue.includes('"')) {
+                    return `"${stringValue.replace(/"/g, '""')}"`
+                  }
+                  return stringValue
+                })
+                .join(',')
+            ),
+          ]
+
+          const csvContent = csvRows.join('\n')
+          return createSuccessResponse(
+            { csv: csvContent },
+            `Exported ${filteredRows.length} row(s) as CSV`
+          )
+        }
+
+        return createErrorResponse('Invalid format. Use "json" or "csv"', 'INVALID_FORMAT')
+      } catch (error) {
+        return createErrorResponse(
+          error instanceof Error ? error.message : 'Failed to download data',
+          'DOWNLOAD_ERROR'
+        )
+      }
+    }
+
+    const actions = { downloadData }
+    window.openai.actions.register(actions)
+
+    return () => {
+      window.openai?.actions?.unregister?.()
+    }
+  }, [result])
 
   return (
     <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'h-screen'}`}>

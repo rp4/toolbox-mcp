@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { AuditVerseModel } from '@audittoolbox/schemas'
+import type { AuditVerseModel, AuditVerseDownloadParams } from '@audittoolbox/schemas'
+import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 
 interface AuditVerseViewProps {
   model: AuditVerseModel
@@ -233,6 +234,113 @@ export function AuditVerseView({ model }: AuditVerseViewProps) {
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen)
   }
+
+  // Register AI agent actions
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.openai?.actions?.register) return
+
+    const downloadData = async (params: AuditVerseDownloadParams) => {
+      try {
+        let filteredNodes = model.nodes
+        let filteredEdges = model.edges
+
+        // Apply filters if provided
+        if (params.filters) {
+          if (params.filters.nodeTypes) {
+            filteredNodes = filteredNodes.filter((n) => params.filters!.nodeTypes!.includes(n.type))
+          }
+          if (params.filters.nodeIds) {
+            filteredNodes = filteredNodes.filter((n) => params.filters!.nodeIds!.includes(n.id))
+          }
+          if (params.filters.minSize !== undefined) {
+            filteredNodes = filteredNodes.filter((n) => (n.size || 1) >= params.filters!.minSize!)
+          }
+          if (params.filters.maxSize !== undefined) {
+            filteredNodes = filteredNodes.filter((n) => (n.size || 1) <= params.filters!.maxSize!)
+          }
+
+          // Filter edges to only include those connected to filtered nodes
+          const nodeIds = new Set(filteredNodes.map((n) => n.id))
+          filteredEdges = filteredEdges.filter(
+            (e) => nodeIds.has(e.from) && nodeIds.has(e.to)
+          )
+        }
+
+        // Format data based on requested format
+        if (params.format === 'json') {
+          const data = {
+            nodes: filteredNodes,
+            edges: filteredEdges,
+            layout: model.layout,
+            summary: {
+              totalNodes: filteredNodes.length,
+              totalEdges: filteredEdges.length,
+              nodeTypes: Object.fromEntries(
+                ['entity', 'risk', 'control'].map((type) => [
+                  type,
+                  filteredNodes.filter((n) => n.type === type).length,
+                ])
+              ),
+            },
+          }
+          return createSuccessResponse(data, `Exported ${filteredNodes.length} nodes and ${filteredEdges.length} edges`)
+        } else if (params.format === 'csv') {
+          // Export nodes as CSV
+          const nodeHeaders = ['id', 'type', 'label', 'size']
+          const nodeRows = filteredNodes.map((node) => [
+            node.id,
+            node.type,
+            node.label,
+            node.size || 1,
+          ])
+
+          const nodeCsv = [
+            nodeHeaders.join(','),
+            ...nodeRows.map((row) =>
+              row.map((cell) => (typeof cell === 'string' && cell.includes(',') ? `"${cell}"` : cell)).join(',')
+            ),
+          ].join('\n')
+
+          // Export edges as CSV
+          const edgeHeaders = ['from', 'to', 'weight']
+          const edgeRows = filteredEdges.map((edge) => [
+            edge.from,
+            edge.to,
+            edge.weight || 1,
+          ])
+
+          const edgeCsv = [
+            edgeHeaders.join(','),
+            ...edgeRows.map((row) =>
+              row.map((cell) => (typeof cell === 'string' && cell.includes(',') ? `"${cell}"` : cell)).join(',')
+            ),
+          ].join('\n')
+
+          return createSuccessResponse(
+            {
+              nodes: nodeCsv,
+              edges: edgeCsv,
+            },
+            `Exported ${filteredNodes.length} nodes and ${filteredEdges.length} edges as CSV`
+          )
+        }
+
+        return createErrorResponse('Invalid format. Use "json" or "csv"', 'INVALID_FORMAT')
+      } catch (error) {
+        return createErrorResponse(
+          error instanceof Error ? error.message : 'Failed to download data',
+          'DOWNLOAD_ERROR'
+        )
+      }
+    }
+
+    const actions = { downloadData }
+    window.openai.actions.register(actions)
+
+    return () => {
+      window.openai?.actions?.unregister?.()
+    }
+  }, [model])
 
   return (
     <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'h-screen'}`}>

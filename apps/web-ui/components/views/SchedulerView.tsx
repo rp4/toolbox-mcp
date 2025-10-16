@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import type { SchedulerResult } from '@audittoolbox/schemas'
+import { useState, useEffect } from 'react'
+import type { SchedulerResult, SchedulerDownloadParams } from '@audittoolbox/schemas'
+import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 
 interface SchedulerViewProps {
   result: SchedulerResult
@@ -47,6 +48,116 @@ export function SchedulerView({ result }: SchedulerViewProps) {
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen)
   }
+
+  // Register AI agent actions
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.openai?.actions?.register) return
+
+    const downloadData = async (params: SchedulerDownloadParams) => {
+      try {
+        let data = result.table || []
+
+        // Apply filters if provided
+        if (params.filters) {
+          if (params.filters.columns && params.filters.columns.length > 0) {
+            // Filter to only include specified columns
+            data = data.map((row) => {
+              const filtered: Record<string, string> = {}
+              params.filters!.columns!.forEach((col) => {
+                if (col in row) {
+                  filtered[col] = row[col]
+                }
+              })
+              return filtered
+            })
+          }
+
+          if (params.filters.dateRange && data.length > 0) {
+            // Filter by date range (assuming there's a date column)
+            const dateColumns = Object.keys(data[0]).filter((key) =>
+              key.toLowerCase().includes('date')
+            )
+
+            if (dateColumns.length > 0) {
+              const dateCol = dateColumns[0]
+              const startDate = new Date(params.filters.dateRange.start)
+              const endDate = new Date(params.filters.dateRange.end)
+
+              data = data.filter((row) => {
+                const rowDate = new Date(row[dateCol])
+                return rowDate >= startDate && rowDate <= endDate
+              })
+            }
+          }
+        }
+
+        // Format data based on requested format
+        if (params.format === 'json') {
+          return createSuccessResponse(
+            {
+              schedule: data,
+              count: data.length,
+            },
+            `Exported ${data.length} schedule item(s)`
+          )
+        } else if (params.format === 'csv') {
+          if (data.length === 0) {
+            return createSuccessResponse({ csv: '' }, 'No schedule data to export')
+          }
+
+          const headers = Object.keys(data[0])
+          const csvRows = [
+            headers.join(','),
+            ...data.map((row) =>
+              headers
+                .map((header) => {
+                  const value = row[header]
+                  if (value.includes(',') || value.includes('"')) {
+                    return `"${value.replace(/"/g, '""')}"`
+                  }
+                  return value
+                })
+                .join(',')
+            ),
+          ]
+
+          const csvContent = csvRows.join('\n')
+          return createSuccessResponse(
+            { csv: csvContent },
+            `Exported ${data.length} schedule item(s) as CSV`
+          )
+        } else if (params.format === 'xlsx') {
+          // Return the xlsx data URL if available
+          if (result.xlsxDataUrl) {
+            return createSuccessResponse(
+              {
+                dataUrl: result.xlsxDataUrl,
+                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                fileName: 'schedule.xlsx',
+              },
+              'Excel schedule ready for download'
+            )
+          } else {
+            return createErrorResponse('XLSX format not available for this schedule', 'XLSX_NOT_AVAILABLE')
+          }
+        }
+
+        return createErrorResponse('Invalid format. Use "json", "csv", or "xlsx"', 'INVALID_FORMAT')
+      } catch (error) {
+        return createErrorResponse(
+          error instanceof Error ? error.message : 'Failed to download data',
+          'DOWNLOAD_ERROR'
+        )
+      }
+    }
+
+    const actions = { downloadData }
+    window.openai.actions.register(actions)
+
+    return () => {
+      window.openai?.actions?.unregister?.()
+    }
+  }, [result])
 
   return (
     <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'h-screen'}`}>
