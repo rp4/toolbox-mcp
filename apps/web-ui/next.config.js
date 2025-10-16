@@ -10,19 +10,16 @@ const nextConfig = {
     }
     return config
   },
-  // Allow embedding in iframe
+  // Allow embedding in iframe from ChatGPT/OpenAI
   async headers() {
     return [
       {
         source: '/:path*',
         headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'ALLOWALL',
-          },
+          // Remove X-Frame-Options to allow CSP frame-ancestors to take precedence
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://*.openai.com https://*.chatgpt.com",
+            value: "frame-ancestors 'self' https://*.openai.com https://*.chatgpt.com https://chatgpt.com https://chat.openai.com",
           },
         ],
       },

@@ -149,8 +149,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: 'test',
-        description: 'Test tool to verify iframe integration is working. Simply type a message and it will be displayed in a formatted view.',
+        name: 'test_tool',
+        description: '⚡ TEST TOOL - Use this to verify iframe integration. Displays any message in a beautiful formatted view. Perfect for testing that the ChatGPT iframe is working correctly.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -413,7 +413,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // Process tool
     switch (name) {
-      case 'test':
+      case 'test_tool':
         return {
           content: [
             {

@@ -117,7 +117,7 @@ const AuditVerseArgsSchema = z.object({
 
 // Map tool names to their schemas
 const toolSchemas: Record<string, z.ZodSchema> = {
-  test: TestArgsSchema,
+  test_tool: TestArgsSchema,
   swimlanes: SwimlanesArgsSchema,
   needle_finder: NeedleFinderArgsSchema,
   tickntie: TicknTieArgsSchema,
