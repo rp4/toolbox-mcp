@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import type { NeedleFinderResult, NeedleDownloadParams } from '@audittoolbox/schemas'
+import type { NeedleFinderResult, NeedleDownloadParams, ActionResponse } from '@audittoolbox/schemas'
 import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 import {
   useReactTable,
@@ -89,7 +89,7 @@ export function NeedleView({ result }: NeedleViewProps) {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.openai?.actions?.register) return
 
-    const downloadData = async (params: NeedleDownloadParams) => {
+    const downloadData = async (params: NeedleDownloadParams): Promise<ActionResponse> => {
       try {
         let filteredRows = result.rows
 

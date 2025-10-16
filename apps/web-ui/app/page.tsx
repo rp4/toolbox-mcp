@@ -17,16 +17,7 @@ import { NeedleView } from '@/components/views/NeedleView'
 import { TickTieView } from '@/components/views/TickTieView'
 import { SchedulerView } from '@/components/views/SchedulerView'
 import { AuditVerseView } from '@/components/views/AuditVerseView'
-
-declare global {
-  interface Window {
-    openai?: {
-      toolOutput?: {
-        structuredContent?: unknown
-      }
-    }
-  }
-}
+// Type definition is in /types/openai.d.ts
 
 export default function App() {
   const [content, setContent] = useState<StructuredContent | null>(null)

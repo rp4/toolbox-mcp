@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { SchedulerResult, SchedulerDownloadParams } from '@audittoolbox/schemas'
+import type { SchedulerResult, SchedulerDownloadParams, ActionResponse } from '@audittoolbox/schemas'
 import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 
 interface SchedulerViewProps {
@@ -53,7 +53,7 @@ export function SchedulerView({ result }: SchedulerViewProps) {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.openai?.actions?.register) return
 
-    const downloadData = async (params: SchedulerDownloadParams) => {
+    const downloadData = async (params: SchedulerDownloadParams): Promise<ActionResponse> => {
       try {
         let data = result.table || []
 

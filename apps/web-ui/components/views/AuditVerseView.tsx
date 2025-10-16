@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { AuditVerseModel, AuditVerseDownloadParams } from '@audittoolbox/schemas'
+import type { AuditVerseModel, AuditVerseDownloadParams, ActionResponse } from '@audittoolbox/schemas'
 import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 
 interface AuditVerseViewProps {
@@ -239,7 +239,7 @@ export function AuditVerseView({ model }: AuditVerseViewProps) {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.openai?.actions?.register) return
 
-    const downloadData = async (params: AuditVerseDownloadParams) => {
+    const downloadData = async (params: AuditVerseDownloadParams): Promise<ActionResponse> => {
       try {
         let filteredNodes = model.nodes
         let filteredEdges = model.edges

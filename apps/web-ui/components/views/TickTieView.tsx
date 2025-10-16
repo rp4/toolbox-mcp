@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import type { TickTieResult, TickTieDownloadParams } from '@audittoolbox/schemas'
+import type { TickTieResult, TickTieDownloadParams, ActionResponse } from '@audittoolbox/schemas'
 import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 
 interface TickTieViewProps {
@@ -56,7 +56,7 @@ export function TickTieView({ result }: TickTieViewProps) {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.openai?.actions?.register) return
 
-    const downloadData = async (params: TickTieDownloadParams) => {
+    const downloadData = async (params: TickTieDownloadParams): Promise<ActionResponse> => {
       try {
         // Format data based on requested format
         if (params.format === 'xlsx') {

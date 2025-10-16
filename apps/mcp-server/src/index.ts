@@ -144,10 +144,29 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
   }
 });
 
-// Register all 5 tools
+// Register all tools (including test tool)
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      {
+        name: 'test',
+        description: 'Test tool to verify iframe integration is working. Simply type a message and it will be displayed in a formatted view.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              description: 'The message to display in the test view',
+            },
+          },
+          required: ['message'],
+        },
+        _meta: {
+          'openai/outputTemplate': 'ui://widget/widget.html',
+          'openai/toolInvocation/invoking': 'Displaying test message…',
+          'openai/toolInvocation/invoked': 'Test message displayed',
+        },
+      },
       {
         name: 'swimlanes',
         description: 'Create interactive process/sequence diagrams with swim lanes. Upload process descriptions, flowcharts, or describe workflows.',
@@ -394,6 +413,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // Process tool
     switch (name) {
+      case 'test':
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Test message: "${args.message}"`,
+            },
+          ],
+          structuredContent: {
+            tool: 'test',
+            message: args.message,
+          },
+        };
+
       case 'swimlanes':
         return {
           content: [

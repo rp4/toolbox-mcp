@@ -10,6 +10,11 @@ import { ValidationError, PayloadTooLargeError } from '../utils/errors.js';
 // Note: These are the schemas for the TOOL ARGUMENTS that come into MCP server
 // They differ slightly from the output schemas sent to the iframe
 
+// Test tool arguments
+const TestArgsSchema = z.object({
+  message: z.string().min(1, "Message required").max(5000, "Message too long"),
+});
+
 // Swimlanes tool arguments
 const SwimlanesArgsSchema = z.object({
   lanes: z.array(
@@ -112,6 +117,7 @@ const AuditVerseArgsSchema = z.object({
 
 // Map tool names to their schemas
 const toolSchemas: Record<string, z.ZodSchema> = {
+  test: TestArgsSchema,
   swimlanes: SwimlanesArgsSchema,
   needle_finder: NeedleFinderArgsSchema,
   tickntie: TicknTieArgsSchema,

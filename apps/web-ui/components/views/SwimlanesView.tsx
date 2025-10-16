@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { SwimlanesSpec, SwimlanesDownloadParams } from '@audittoolbox/schemas'
+import type { SwimlanesSpec, SwimlanesDownloadParams, ActionResponse } from '@audittoolbox/schemas'
 import { createSuccessResponse, createErrorResponse } from '@audittoolbox/schemas'
 
 interface SwimlanesViewProps {
@@ -186,7 +186,7 @@ export function SwimlanesView({ spec }: SwimlanesViewProps) {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.openai?.actions?.register) return
 
-    const downloadData = async (params: SwimlanesDownloadParams) => {
+    const downloadData = async (params: SwimlanesDownloadParams): Promise<ActionResponse> => {
       try {
         const canvas = canvasRef.current
         if (!canvas) {
